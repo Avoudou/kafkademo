@@ -1,9 +1,0 @@
-[submodule "docapi"]
-	path = docapi
-	url = https://github.com/Avoudou/kafkademo-docUpload.git
-[submodule "docProcessor"]
-	path = docProcessor
-	url = https://github.com/Avoudou/kafkademo-docProcessor.git
-[submodule "docManager"]
-	path = docManager
-	url = https://github.com/Avoudou/kafkademo-docManager.git
