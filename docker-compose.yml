@@ -1,0 +1,23 @@
+services:                        # List of containers we want to run
+  mongo:                         # MongoDB service (our document database)
+    image: mongo:7               # Use official MongoDB v7 image from Docker Hub
+    container_name: docenrich-mongo
+    restart: unless-stopped      # Always restart unless you explicitly stop it
+    ports:
+      - "27017:27017"            # Expose Mongo on localhost:27017 (host:container)
+    environment:
+      MONGO_INITDB_DATABASE: docenrich  # Default database to create on first start
+    volumes:
+      - mongo_data:/data/db      # Persist Mongo data on a named Docker volume
+
+  kafka:                         # Kafka service (message broker between API and worker)
+    image: apache/kafka:latest   # Official Apache Kafka image (KRaft mode, no Zookeeper)
+    container_name: docenrich-kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"              # Expose Kafka on localhost:9092 for host apps
+
+volumes:                       # Definitions of the named volumes above
+  mongo_data:                  # Stores MongoDB data files
+
+
