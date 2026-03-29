@@ -1,23 +1,105 @@
-services:                        # List of containers we want to run
-  mongo:                         # MongoDB service (our document database)
-    image: mongo:7               # Use official MongoDB v7 image from Docker Hub
-    container_name: docenrich-mongo
-    restart: unless-stopped      # Always restart unless you explicitly stop it
-    ports:
-      - "27017:27017"            # Expose Mongo on localhost:27017 (host:container)
-    environment:
-      MONGO_INITDB_DATABASE: docenrich  # Default database to create on first start
-    volumes:
-      - mongo_data:/data/db      # Persist Mongo data on a named Docker volume
+# All containers defined here share a default Docker network automatically.
+# They can reach each other by service name (e.g. "kafka", "mongo").
+services:
 
-  kafka:                         # Kafka service (message broker between API and worker)
-    image: apache/kafka:latest   # Official Apache Kafka image (KRaft mode, no Zookeeper)
-    container_name: docenrich-kafka
+  # ---------- INFRASTRUCTURE ----------
+
+  mongo:
+    image: mongo:7                      # Use official MongoDB 7 image from Docker Hub
+    container_name: kafkademo-mongo
+    restart: unless-stopped             # Auto-restart on crash, but not if manually stopped
+    ports:
+      - "27017:27017"                   # host:container — makes Mongo accessible from your machine too
+    environment:
+      MONGO_INITDB_DATABASE: kafkademodb  # Creates this database on first startup
+    volumes:
+      - mongo_data:/data/db             # Persist data between restarts (named volume, see bottom)
+
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafkademo-kafka
     restart: unless-stopped
     ports:
-      - "9092:9092"              # Expose Kafka on localhost:9092 for host apps
+      - "9092:9092"                     # Exposed to host so you can also run services outside Docker
+    environment:
+      # KRaft mode (no Zookeeper) — required settings for the apache/kafka image
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # Two listeners: PLAINTEXT for host (localhost:9092), DOCKER for containers (kafka:29092)
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,DOCKER://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,DOCKER://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,DOCKER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
-volumes:                       # Definitions of the named volumes above
-  mongo_data:                  # Stores MongoDB data files
+  # ---------- APPLICATION SERVICES ----------
+  # All use the same Dockerfile (in this folder) with a different JAR_FILE arg.
+  # Environment variables override application.properties values so services
+  # connect to "kafka:29092" and "mongo:27017" (container names) instead of localhost.
 
+  docapi:
+    build:
+      context: .                        # Build from this folder (where Dockerfile and JARs live)
+      args:
+        JAR_FILE: docapi.jar            # Passed to Dockerfile's ARG — picks which JAR to package
+    container_name: kafkademo-docapi
+    restart: unless-stopped
+    ports:
+      - "8080:8080"                     # Upload UI at http://localhost:8080
+    environment:
+      SPRING_MONGODB_URI: mongodb://mongo:27017/kafkademodb
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:                         # Start kafka and mongo before this service
+      - kafka
+      - mongo
 
+  doc-manager:
+    build:
+      context: .
+      args:
+        JAR_FILE: doc-manager.jar
+    container_name: kafkademo-docmanager
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      - kafka
+
+  doc-processor:
+    build:
+      context: .
+      args:
+        JAR_FILE: docprocessor.jar
+    container_name: kafkademo-docprocessor
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      - kafka
+
+  kafka-dashboard:
+    build:
+      context: .
+      args:
+        JAR_FILE: kafka-dashboard.jar
+    container_name: kafkademo-dashboard
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_MONGODB_URI: mongodb://mongo:27017/kafkademodb
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      - kafka
+      - mongo
+
+# Named volume — Docker manages the storage. Data survives container restarts.
+# Deleted only with: docker-compose down -v
+volumes:
+  mongo_data:

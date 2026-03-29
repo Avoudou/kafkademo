@@ -6,43 +6,25 @@ Four Spring Boot apps (upload, manager, processor, dashboard) over Apache Kafka 
 Root (README, JARs, docker-compose): [kafkademo](https://github.com/Avoudou/kafkademo)  
 Projects: [docUpload](https://github.com/Avoudou/kafkademo-docUpload) · [docManager](https://github.com/Avoudou/kafkademo-docManager) · [docProcessor](https://github.com/Avoudou/kafkademo-docProcessor) · [dashboard](https://github.com/Avoudou/kafkademo-dashboard)
 
-**Prerequisites:** Docker Desktop, Java 21. The four JARs are built from the project repos above.
+**Prerequisites:** Docker Desktop. The four JARs are built from the project repos above.
 
-**1. Run infrastructure**
-
-```bash
-docker-compose up -d
-```
-
-(Mongo on 27017, Kafka on 9092.) To stop: `docker-compose down`.
-
-**2. Run the four JARs** (each in its own terminal, from this folder)
-
-| JAR | Port |
-|-----|------|
-| docapi.jar | 8080 |
-| doc-manager.jar | 8081 |
-| docprocessor.jar | 8082 |
-| kafka-dashboard.jar | 8083 |
+**Run everything with one command:**
 
 ```bash
-java -jar docapi.jar
+docker-compose up --build
 ```
 
-```bash
-java -jar doc-manager.jar
-```
+This starts Kafka, MongoDB, and all four services in containers. To stop: `docker-compose down`.
 
-```bash
-java -jar docprocessor.jar
-```
+| Service | Port |
+|---------|------|
+| docapi (upload) | 8080 |
+| doc-manager | 8081 |
+| docprocessor | 8082 |
+| kafka-dashboard | 8083 |
 
-```bash
-java -jar kafka-dashboard.jar
-```
+**Open in browser:** Upload UI — http://localhost:8080 · The manager (doc-manager.jar) runs on http://localhost:8081, just display the service health - backend only. · Processor dashboard (tracks backend mock processes  with random delay) — http://localhost:8082 · Flow dashboard (message flow across topics) — http://localhost:8083. 
 
-**3. Open in browser:** Upload UI — http://localhost:8080 · Processor dashboard (track processes) — http://localhost:8082 · Flow dashboard (message flow across topics) — http://localhost:8083. The manager (doc-manager.jar) runs on 8081 and has no UI; it is a backend service only.  
-
-The upload API accepts **Excel spreadsheets only** (`.xlsx`, e.g. from Google Sheets export). On the upload page, in the **TEST** section: set **Count** (default 10), click **Test multiple uploads** to create that many test uploads and drive the pipeline, or **Clear database** to reset stored data.
+The upload API accepts **Excel spreadsheets only** (`.xlsx`, e.g. from Google Sheets export). On the upload page, in the **TEST** section: set **Count** (default 10), click **Test multiple uploads** to create that many random test documents and upload them, or **Clear database** to reset stored data.
 
 **Flow:** You upload a document (or trigger test uploads); the upload API sends a Kafka message to a topic. The manager consumes it and publishes an appropriate message for processing. The processor is notified, runs an async mock process (3–10 s), then publishes to a common completion topic. The processor has its own dashboard to track processes; the root dashboard shows message flow across all topics.
